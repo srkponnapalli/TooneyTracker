@@ -2,8 +2,12 @@ from fastapi import FastAPI
 
 from app.db.connection import SessionLocal
 from sqlalchemy import text
-
+from app.routers.plaid import router as plaid_router
+from dotenv import load_dotenv
+load_dotenv()
 app = FastAPI()
+app.include_router(plaid_router, prefix="/plaid")
+
 
 
 @app.get("/health")
@@ -21,3 +25,5 @@ def db_health():
         return {"DB Health": "is_bad", "error": str(e)}
     finally:
         db.close()
+
+

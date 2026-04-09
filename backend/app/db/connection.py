@@ -3,8 +3,6 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-
-
 load_dotenv()
 db_host = os.getenv("DB_HOST")
 db_port = os.getenv("DB_PORT")
