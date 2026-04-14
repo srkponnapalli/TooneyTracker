@@ -233,7 +233,7 @@ Dashboard available at: `http://localhost:8501`
 ## Author
 
 **Siva Ponnapalli** — Senior Data Engineer  
-[GitHub](https://github.com/srkponnapalli) · [LinkedIn](https://linkedin.com/in/srkponnapalli)
+[GitHub](https://github.com/srkponnapalli) · [LinkedIn](https://linkedin.com/in/ponnasivark)
 
 ---
 
