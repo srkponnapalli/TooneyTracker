@@ -5,3 +5,4 @@ python-dotenv==1.0.1
 sqlalchemy==2.0.30
 alembic==1.13.1
 plaid-python==38.4.0
+streamlit==1.35.0
