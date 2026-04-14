@@ -73,3 +73,92 @@ def exchange_token(data: ExchangeTokenRequest):
         db.close()
     
     return {"access_token": access_token, "item_id": item_id}
+
+
+from plaid.model.accounts_get_request import AccountsGetRequest
+
+@router.post("/sync-accounts")
+def sync_accounts():
+    db = SessionLocal()
+    try:
+        institution = db.execute(text(
+            "SELECT id, access_token FROM institutions LIMIT 1"
+        )).fetchone()
+
+        request = AccountsGetRequest(access_token=institution.access_token)
+        response = client.accounts_get(request)
+
+        for account in response['accounts']:
+            db.execute(text("""
+                INSERT INTO accounts 
+                    (institution_id, plaid_account_id, name, type, subtype, current_balance, available_balance)
+                VALUES
+                    (:inst_id, :plaid_id, :name, :type, :subtype, :current, :available)
+                ON CONFLICT (plaid_account_id) DO NOTHING
+            """), {
+                "inst_id": str(institution.id),
+                "plaid_id": account["account_id"],
+                "name": account["name"],
+                "type": str(account["type"]),
+                "subtype": str(account["subtype"]),
+                "current": account["balances"]["current"],
+                "available": account["balances"]["available"]
+            })
+
+        db.commit()
+        return {"synced_accounts": len(response['accounts'])}
+    finally:
+        db.close()
+
+
+from plaid.model.transactions_sync_request import TransactionsSyncRequest
+
+@router.post("/sync-transactions")
+def sync_transactions():
+    db = SessionLocal()
+    try:
+        # Step 1 - get access token from DB
+        institution = db.execute(text(
+            "SELECT id, access_token, cursor FROM institutions LIMIT 1"
+        )).fetchone()
+
+        # Step 2 - call Plaid sync
+        request = TransactionsSyncRequest(
+            access_token=institution.access_token,
+            cursor=institution.cursor or ""
+        )
+        response = client.transactions_sync(request)
+        transactions = response['added']
+
+        # Step 3 - store each transaction
+        for txn in transactions:
+            db.execute(text("""
+                INSERT INTO transactions 
+                    (account_id, plaid_transaction_id, amount, merchant_name, raw_name, date, pending, payment_channel)
+                VALUES
+                    (
+                        (SELECT id FROM accounts WHERE plaid_account_id = :account_id LIMIT 1),
+                        :plaid_id, :amount, :merchant, :raw_name, :date, :pending, :channel
+                    )
+                ON CONFLICT (plaid_transaction_id) DO NOTHING
+            """), {
+                "account_id": txn["account_id"],
+                "plaid_id": txn["transaction_id"],
+                "amount": txn["amount"],
+                "merchant": txn.get("merchant_name"),
+                "raw_name": txn["name"],
+                "date": txn["date"],
+                "pending": txn["pending"],
+                "channel": txn.get("payment_channel")
+            })
+
+        # Step 4 - update cursor
+        db.execute(text(
+            "UPDATE institutions SET cursor = :cursor, last_synced_at = NOW() WHERE id = :id"
+        ), {"cursor": response['next_cursor'], "id": str(institution.id)})
+
+        db.commit()
+        return {"synced": len(transactions)}
+
+    finally:
+        db.close()
